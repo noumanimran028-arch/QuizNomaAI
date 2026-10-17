@@ -1,0 +1,250 @@
+
+/* General Styling */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    background: #F8F7FC;
+    color: #1E1B4B;
+    font-size: 16px;
+}
+
+/* Navbar */
+.Nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px 20px;
+    min-height: 65px;
+    background: #312E81;
+    color: #FFFFFF;
+    box-shadow: 0 3px 12px rgba(49, 46, 129, 0.15);
+}
+
+/* Score Section */
+.Score {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 20px;
+}
+
+.Score h3 {
+    background: #EDE9FE;
+    color: #5B21B6;
+    border: 1px solid #DDD6FE;
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin: 5px;
+    font-size: 17px;
+}
+
+.Score p {
+    color: #0F766E;
+    font-size: 16px;
+    font-weight: bold;
+    margin: 5px;
+}
+
+/* Main Grid Container */
+.Grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 760px;
+    margin: 25px auto;
+    padding: 0 16px;
+}
+
+/* Common Box Styling */
+.Box {
+    border: 1px solid #E2E8F0;
+    padding: 20px;
+    text-align: center;
+    border-radius: 14px;
+    background-color: #FFFFFF;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    box-shadow: 0 4px 12px rgba(49, 46, 129, 0.05);
+}
+
+/* Question Box */
+.Question-Box {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #6D28D9, #4F46E5);
+    color: #FFFFFF;
+    border-color: transparent;
+    font-size: 20px;
+    line-height: 1.6;
+    padding: 28px 22px;
+    box-shadow: 0 8px 20px rgba(109, 40, 217, 0.18);
+}
+
+/* Options Boxes */
+.Option-Box {
+    background-color: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    transition: background-color 0.2s ease,
+                border-color 0.2s ease,
+                transform 0.2s ease,
+                box-shadow 0.2s ease;
+}
+
+/* Options Hover */
+.Option-Box:hover {
+    background-color: #F5F3FF;
+    border-color: #8B5CF6;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(124, 58, 237, 0.09);
+}
+
+/* Option Buttons */
+.Option-Box button {
+    width: 100%;
+    min-height: 44px;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: #334155;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+/* Option Button Hover */
+.Option-Box:hover button {
+    color: #5B21B6;
+}
+
+/* Keyboard Accessibility */
+.Option-Box button:focus-visible,
+.Control button:focus-visible {
+    outline: 3px solid #A78BFA;
+    outline-offset: 3px;
+}
+
+/* Control Buttons */
+.Control {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin: 25px auto;
+    padding: 15px;
+}
+
+/* Default Button */
+.Control button {
+    min-width: 170px;
+    min-height: 48px;
+    padding: 12px 22px;
+    margin: 0;
+    border: none;
+    border-radius: 10px;
+    background: #4F46E5;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.18);
+    transition: background-color 0.2s ease,
+                transform 0.2s ease,
+                box-shadow 0.2s ease;
+}
+
+.Control button:hover {
+    background: #3730A3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(79, 70, 229, 0.24);
+}
+
+.Control button:active {
+    transform: translateY(0);
+}
+
+/* Submit Button — optional class */
+.Control .SubmitBtn {
+    background: #0F766E;
+}
+
+.Control .SubmitBtn:hover {
+    background: #115E59;
+}
+
+/* Back to Course Button — optional class */
+.Control .BackBtn {
+    background: #EDE9FE;
+    color: #5B21B6;
+    border: 1px solid #C4B5FD;
+    box-shadow: none;
+}
+
+.Control .BackBtn:hover {
+    background: #DDD6FE;
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+    .Nav {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .Score {
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .Score h3 {
+        font-size: 15px;
+        padding: 8px 12px;
+    }
+
+    .Score p {
+        font-size: 14px;
+    }
+
+    .Grid {
+        gap: 10px;
+        margin: 15px auto;
+        padding: 0 10px;
+    }
+
+    .Box {
+        padding: 12px 8px;
+        border-radius: 10px;
+    }
+
+    .Question-Box {
+        font-size: 17px;
+        padding: 18px 12px;
+    }
+
+    .Option-Box button {
+        font-size: 14px;
+        padding: 10px 5px;
+    }
+
+    .Control {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .Control button {
+        width: 100%;
+        max-width: 280px;
+    }
+}
