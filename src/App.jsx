@@ -1,6 +1,6 @@
 
 import './App.css'
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import Quiz from './Quiz.jsx'
 import LandingDashboard from "./LandingDashboard";
 
@@ -9,34 +9,39 @@ function App() {
   const ref1 = useRef(null);
   const [Mcqs, setMcqs] = useState([]);
   const [showLanding, setShowLanding] = useState(true);
-  
+
   async function handleGenerate() {
     if (ref1.current.value.trim() === "") {
       console.log("Please enter MCQs first.");
       return;
     }
 
-    await Chat();
-    setShowQuiz(true);
+    const result = await Chat();
+
+    // Quiz sirf successful response par open hoga
+    if (result && Array.isArray(result.mcqs)) {
+      setShowQuiz(true);
+    }
   }
 
   const APIKEY = import.meta.env.VITE_GROQ_API_KEY;
+
   const SYSTEM_PROMPT = `
   You are an intelligent MCQ Generator and Text Converter.
-  
+
   Your task is to process any text, notes, paragraphs, documents,
   or educational content provided by the user and return MCQs
   in the required JSON format.
-  
+
   Follow these rules carefully:
-  
+
   1. IDENTIFY THE INPUT TYPE
-  
+
   First, determine whether the provided content already contains
   MCQs or is general information without MCQs.
-  
+
   2. IF MCQs ALREADY EXIST
-  
+
   - Extract the existing MCQs from the provided content.
   - Preserve the original questions, options, and correct answers.
   - Convert the MCQs into the required JSON format.
@@ -47,9 +52,9 @@ function App() {
     available options instead of inventing new ones.
   - If the correct answer is missing or cannot be identified,
     use an empty string for "answer".
-  
+
   3. IF MCQs DO NOT EXIST
-  
+
   - Generate relevant MCQs based on the provided content.
   - Questions must be based on the given information.
   - Do not introduce unrelated facts or unsupported information.
@@ -60,11 +65,11 @@ function App() {
   - Ensure that exactly one option is correct for each generated MCQ.
   - Set the "answer" field to the label of the correct option.
   - Do not create duplicate or repetitive questions.
-  
+
   4. REQUIRED OUTPUT FORMAT
-  
+
   Return the result in this JSON structure:
-  
+
   {
       "mcqs": [
           {
@@ -79,9 +84,9 @@ function App() {
           }
       ]
   }
-  
+
   5. OUTPUT RULES
-  
+
   - Return only valid JSON.
   - Do not include Markdown, explanations, or introductory text.
   - Use double quotes for JSON keys and string values.
@@ -91,48 +96,23 @@ function App() {
     { "mcqs": [] }
   `;
 
-  /*
-const SYSTEM_PROMPT = `
-You are an MCQ text converter.
-
-Convert the MCQs provided by the user into valid JSON.
-Preserve the original questions, options, and correct answers.
-Do not create new MCQs.
-
-Return only valid JSON in this format:
-{
-    "mcqs": [
-        {
-            "question": "Question text",
-            "options": [
-                { "label": "A", "text": "Option 1" },
-                { "label": "B", "text": "Option 2" },
-                { "label": "C", "text": "Option 3" },
-                { "label": "D", "text": "Option 4" }
-            ],
-            "answer": "D"
-        }
-    ]
-}
-
-If the correct answer is missing or cannot be identified,
-use an empty string for "answer".
-
-Return valid JSON only. Do not use Markdown.
-`;
-*/
-
-
   async function getAIResponse(Value) {
     console.log("API key loaded:", Boolean(APIKEY));
+
     const url = "https://api.groq.com/openai/v1/chat/completions";
+
     if (!APIKEY) {
-      console.log("API key abhi load nahi hui.");
-      return;
-  }
+      console.error("API key is not loaded.");
+      return null;
+    }
+
     const Data = {
       model: "openai/gpt-oss-20b",
-      max_completion_tokens: 3000,
+      max_completion_tokens: 8192,
+      reasoning_effort: "low",
+      response_format: {
+        type: "json_object"
+      },
       messages: [
         {
           role: "system",
@@ -162,59 +142,79 @@ Return valid JSON only. Do not use Markdown.
           "API Error:",
           result.error?.message || "Request failed."
         );
-        return;
+        return null;
       }
 
-      // AI ka response string mein
-      const reply = result.choices[0].message.content;
+      // AI response aur usage details
+      const choice = result.choices?.[0];
+
+      if (!choice) {
+        console.error("AI response is missing.");
+        return null;
+      }
+
+      const reply = choice.message?.content;
 
       console.log("AI Reply String:", reply);
-
-      // JSON string ko JavaScript object mein convert karo
-      console.log("Finish reason:", result.choices[0].finish_reason);
+      console.log("Finish reason:", choice.finish_reason);
       console.log("Usage:", result.usage);
-      console.log("Response length:", reply.length);
-      const data = JSON.parse(reply);
+      console.log("Response length:", reply?.length ?? 0);
 
-      //console.log("Parsed Object:", data);
-      //console.log("MCQs Array:", data.mcqs);
+      // Incomplete response ko parse nahi karna
+      if (choice.finish_reason === "length") {
+        console.error(
+          "AI response incomplete. Token limit reached. Please retry."
+        );
+        return null;
+      }
+
+      if (!reply || !reply.trim()) {
+        console.error("AI returned an empty response.");
+        return null;
+      }
+
+      // JSON string ko JavaScript object mein convert karna
+      let data;
+
+      try {
+        data = JSON.parse(reply);
+      } catch (error) {
+        console.error("Invalid JSON received:", error.message);
+        return null;
+      }
+
+      // Response structure validate karna
+      if (!data || !Array.isArray(data.mcqs)) {
+        console.error("Invalid response: mcqs array is missing.");
+        return null;
+      }
+
+      // MCQs console mein check karna
       for (let i = 0; i < data.mcqs.length; i++) {
         console.log(data.mcqs[i].question);
         console.log(data.mcqs[i].options);
         console.log(data.mcqs[i].answer);
       }
-      //console.log("Last 300 characters:", reply.slice(-300));
+
+      // State sirf valid response milne par update hogi
       setMcqs(data.mcqs);
-      //data.mcqs[0].question;
-      //console.log(data.mcqs[0].options);
-      //console.log(data.mcqs[0].answer);
 
       return data;
 
     } catch (error) {
       console.error("Error:", error.message);
+      return null;
     }
   }
-
-
-
 
   async function Chat() {
     if (ref1.current.value.trim() === "") {
       console.log("Please enter MCQs first.");
-      return;
+      return null;
     }
 
-    try {
-      await getAIResponse(ref1.current.value);
-    } catch (error) {
-      console.error("Error:", error.message);
-    }
+    return await getAIResponse(ref1.current.value);
   }
-
-
-  //data.mcqs[0].options);
-  //console.log(data.mcqs[0].answer)
 
   if (showLanding) {
     return (
@@ -251,4 +251,5 @@ Return valid JSON only. Do not use Markdown.
     </div>
   );
 }
+
 export default App;
