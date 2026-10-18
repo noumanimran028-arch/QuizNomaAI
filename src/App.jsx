@@ -132,7 +132,7 @@ Return valid JSON only. Do not use Markdown.
   }
     const Data = {
       model: "openai/gpt-oss-20b",
-      max_completion_tokens: 8192,
+      max_completion_tokens: 1000,
       messages: [
         {
           role: "system",
