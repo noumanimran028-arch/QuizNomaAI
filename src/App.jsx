@@ -187,9 +187,9 @@ RULES:
       setErrorMessage('');
 
       return {
-        mcqs: validMcqs,
-        hasMore: data.hasMore === true
-      };
+  mcqs: validMcqs,
+  hasMore: data.hasMore !== false
+};
     } catch (error) {
       console.error('AI processing error:', error.message);
 
