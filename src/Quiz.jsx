@@ -16,7 +16,9 @@ function Quiz({
   const [showData, setShowData] = useState(false);
 
   const currentQuestion = Mcqs[activeMcqs];
-  const allAnswered = answered.length === Mcqs.length;
+  const allAnswered = Mcqs.every((_, index) =>
+  answered.includes(index)
+);
   const isLastQuestion = activeMcqs === Mcqs.length - 1;
 
   const Next = () => {
