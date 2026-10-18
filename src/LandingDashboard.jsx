@@ -14,7 +14,9 @@ function LandingDashboard({ onGetStarted }) {
 
       <main className="landing-main">
         <section className="landing-hero">
-          <span className="landing-tag">SMART LEARNING STARTS HERE</span>
+          <span className="landing-tag">
+            SMART LEARNING STARTS HERE
+          </span>
 
           <h1>
             Turn Your Notes
@@ -28,6 +30,19 @@ function LandingDashboard({ onGetStarted }) {
             track your performance.
           </p>
 
+          <div className="landing-batch-info">
+            <span className="landing-batch-icon">⚡</span>
+
+            <div>
+              <h3>Smart Batch Processing</h3>
+              <p>
+                Large MCQ sets are processed in batches of 10 questions
+                to help reduce request failures. Continue with the next
+                batch until your questions are complete.
+              </p>
+            </div>
+          </div>
+
           <button
             className="landing-start-btn"
             onClick={onGetStarted}
@@ -38,6 +53,7 @@ function LandingDashboard({ onGetStarted }) {
 
         <section className="landing-how">
           <h2>How It Works</h2>
+
           <p className="landing-subtitle">
             Three simple steps to improve your preparation.
           </p>
@@ -46,21 +62,29 @@ function LandingDashboard({ onGetStarted }) {
             <div className="landing-card">
               <div className="landing-icon">📝</div>
               <h3>Your Study Notes</h3>
-              <p>Paste your learning material into the text area.</p>
+              <p>
+                Paste your notes or existing MCQs into the text area.
+              </p>
               <span className="landing-step">STEP 01</span>
             </div>
 
             <div className="landing-card">
               <div className="landing-icon">✨</div>
-              <h3>AI-Generated MCQs</h3>
-              <p>Generate multiple-choice questions and options from your notes.</p>
+              <h3>Smart Batch Processing</h3>
+              <p>
+                AI processes up to 10 questions per batch to help
+                handle large sets more reliably.
+              </p>
               <span className="landing-step">STEP 02</span>
             </div>
 
             <div className="landing-card">
               <div className="landing-icon">🎯</div>
-              <h3>Test Your Knowledge</h3>
-              <p>Attempt the quiz and check your score to review your preparation.</p>
+              <h3>Practice & Continue</h3>
+              <p>
+                Answer each batch, click Next Batch, and continue
+                practicing while more questions are available.
+              </p>
               <span className="landing-step">STEP 03</span>
             </div>
           </div>
