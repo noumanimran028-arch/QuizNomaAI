@@ -94,6 +94,29 @@ function App() {
   - Ensure the output can be parsed using JSON.parse().
   - If no useful MCQs can be created from the input, return:
     { "mcqs": [] }
+
+    6. PARTIAL COMPLETION RULES
+
+- Prioritize returning complete, valid MCQs over completing
+  the entire requested quantity in one response.
+
+- If the requested quantity is too large for the available
+  output budget, return as many complete MCQs as possible.
+
+- Never intentionally return an empty result when useful,
+  complete MCQs can be generated.
+
+- Never return a partially written question or incomplete options.
+
+- Always return valid JSON matching the required schema.
+
+- Never claim that the requested quantity is complete if
+  fewer MCQs were returned.
+
+- Preserve the original questions and answers when processing
+  existing MCQs.
+
+- Do not invent missing answers when processing existing MCQs.
   `;
 
   async function getAIResponse(Value) {
