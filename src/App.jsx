@@ -150,7 +150,8 @@ RULES:
       }
 
       const data = JSON.parse(reply);
-
+      console.log('AI hasMore:', data.hasMore);
+console.log('Received MCQs:', data.mcqs?.length);
       if (!data || !Array.isArray(data.mcqs)) {
         setErrorMessage('AI response ka format valid nahi hai.');
         return null;
