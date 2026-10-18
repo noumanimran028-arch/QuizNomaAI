@@ -227,3 +227,41 @@ body {
         font-size: 17px;
     }
 }
+
+
+.landing-batch-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  max-width: 560px;
+  margin: 24px 0;
+  padding: 18px;
+  text-align: left;
+  background: rgba(106, 17, 203, 0.08);
+  border: 1px solid rgba(106, 17, 203, 0.2);
+  border-radius: 14px;
+}
+
+.landing-batch-icon {
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.landing-batch-info h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.landing-batch-info p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+@media (max-width: 600px) {
+  .landing-batch-info {
+    padding: 14px;
+    gap: 10px;
+  }
+}
+
