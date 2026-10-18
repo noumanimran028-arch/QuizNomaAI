@@ -130,14 +130,31 @@ RULES:
 
       const result = await response.json();
 
-      if (!response.ok) {
-        const message =
-          result.error?.message || 'API request failed.';
+      
+if (!response.ok) {
+  const status = response.status;
 
-        setErrorMessage(message);
-        console.error('API Error:', message);
-        return null;
-      }
+  let friendlyMessage =
+    'Your next batch could not be loaded. Please try again to continue your quiz.';
+
+  if (status === 429) {
+    friendlyMessage =
+      'Your next batch is waiting! Please wait a little and try again to continue your quiz.';
+  } else if (status >= 500) {
+    friendlyMessage =
+      'Our AI service is temporarily busy. Please try again in a little while.';
+  }
+
+  setErrorMessage(friendlyMessage);
+
+  console.error(
+    'API Error:',
+    result.error?.message || status
+  );
+
+  return null;
+}
+
 
       const choice = result.choices?.[0];
       const reply = choice?.message?.content;
