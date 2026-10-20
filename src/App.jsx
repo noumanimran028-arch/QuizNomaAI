@@ -1,300 +1,237 @@
-import './App.css';
-import { useRef, useState } from 'react';
-import Quiz from './Quiz.jsx';
-import LandingDashboard from './LandingDashboard';
 
-const BATCH_SIZE = 10;
+import './App.css'
+import { useState, useRef } from 'react';
+import Quiz from './Quiz.jsx'
+import LandingDashboard from "./LandingDashboard";
 
 function App() {
   const [showQuiz, setShowQuiz] = useState(false);
-  const [showLanding, setShowLanding] = useState(true);
-  const [Mcqs, setMcqs] = useState([]);
-  const [sourceText, setSourceText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-
   const ref1 = useRef(null);
+  const [Mcqs, setMcqs] = useState([]);
+  const [showLanding, setShowLanding] = useState(true);
+  const [Generate, setGenerate] = useState(false);
+  const isGenerating = useRef(false);
+
+
+  async function handleGenerate() {
+    if (isGenerating.current) return;
+
+    if (!ref1.current.value.trim()) {
+      console.log("Please enter MCQs first.");
+      return;
+    }
+
+    isGenerating.current = true;
+    setGenerate(true);
+
+    try {
+      const data = await Chat();
+
+      if (data?.mcqs?.length > 0) {
+        setShowQuiz(true);
+      } else {
+        console.log("Quiz generate nahi hua.");
+      }
+    } catch (error) {
+      console.error("Error:", error.message);
+    } finally {
+      isGenerating.current = false;
+      setGenerate(false);
+    }
+  }
+
+
 
   const APIKEY = import.meta.env.VITE_GROQ_API_KEY;
-
   const SYSTEM_PROMPT = `
-You are an intelligent MCQ processor and generator.
+  You are an intelligent MCQ Generator and Text Converter.
+  
+  Your task is to process any text, notes, paragraphs, documents,
+  or educational content provided by the user and return MCQs
+  in the required JSON format.
+  
+  Follow these rules carefully:
+  
+  1. IDENTIFY THE INPUT TYPE
+  
+  First, determine whether the provided content already contains
+  MCQs or is general information without MCQs.
+  
+  2. IF MCQs ALREADY EXIST
+  
+  - Extract the existing MCQs from the provided content.
+  - Preserve the original questions, options, and correct answers.
+  - Convert the MCQs into the required JSON format.
+  - Do not generate additional MCQs unless explicitly requested.
+  - If some formatting is inconsistent, clean it while preserving
+    the original meaning.
+  - If an MCQ has fewer than four options, include only the
+    available options instead of inventing new ones.
+  - If the correct answer is missing or cannot be identified,
+    use an empty string for "answer".
+  
+  3. IF MCQs DO NOT EXIST
+  
+  - Generate relevant MCQs based on the provided content.
+  - Questions must be based on the given information.
+  - Do not introduce unrelated facts or unsupported information.
+  - Each question should test an important concept from the input.
+  - Generate as many useful MCQs as the provided content supports.
+  - Each generated MCQ should have four distinct options labelled
+    A, B, C, and D.
+  - Ensure that exactly one option is correct for each generated MCQ.
+  - Set the "answer" field to the label of the correct option.
+  - Do not create duplicate or repetitive questions.
+  
+  4. REQUIRED OUTPUT FORMAT
+  
+  Return the result in this JSON structure:
+  
+  {
+      "mcqs": [
+          {
+              "question": "Question text",
+              "options": [
+                  { "label": "A", "text": "Option 1" },
+                  { "label": "B", "text": "Option 2" },
+                  { "label": "C", "text": "Option 3" },
+                  { "label": "D", "text": "Option 4" }
+              ],
+              "answer": "D"
+          }
+      ]
+  }
+  
+  5. OUTPUT RULES
+  
+  - Return only valid JSON.
+  - Do not include Markdown, explanations, or introductory text.
+  - Use double quotes for JSON keys and string values.
+  - Do not include trailing commas.
+  - Ensure the output can be parsed using JSON.parse().
+  - If no useful MCQs can be created from the input, return:
+    { "mcqs": [] }
+  `;
 
-The user will provide source text and previously processed questions.
+  /*
+const SYSTEM_PROMPT = `
+You are an MCQ text converter.
 
-YOUR TASK:
-Return the NEXT batch of at most ${BATCH_SIZE} new MCQs.
+Convert the MCQs provided by the user into valid JSON.
+Preserve the original questions, options, and correct answers.
+Do not create new MCQs.
 
-RULES:
-
-1. Identify whether the source already contains MCQs or
-   contains notes, paragraphs, or educational information.
-
-2. If the source contains existing MCQs:
-   - Preserve the original question, options, and answer.
-   - Process questions in their original order.
-   - Do not rewrite existing questions unnecessarily.
-   - Do not invent missing answers.
-   - Skip all questions listed as previously processed.
-
-3. If the source contains notes or general information:
-   - Generate relevant MCQs based on the source.
-   - Generate new questions different from previously processed ones.
-   - Use four options labelled A, B, C, and D.
-   - Set answer to the correct option label.
-   - Do not introduce unsupported facts.
-
-4. Return no more than ${BATCH_SIZE} new MCQs.
-   Return fewer if fewer valid questions remain.
-   Never return questions already processed.
-
-5. Return valid JSON only, using this structure:
-
+Return only valid JSON in this format:
 {
-  "mcqs": [
-    {
-      "question": "Question text",
-      "options": [
-        {"label": "A", "text": "Option A"},
-        {"label": "B", "text": "Option B"},
-        {"label": "C", "text": "Option C"},
-        {"label": "D", "text": "Option D"}
-      ],
-      "answer": "A"
-    }
-  ],
-  "hasMore": true
+    "mcqs": [
+        {
+            "question": "Question text",
+            "options": [
+                { "label": "A", "text": "Option 1" },
+                { "label": "B", "text": "Option 2" },
+                { "label": "C", "text": "Option 3" },
+                { "label": "D", "text": "Option 4" }
+            ],
+            "answer": "D"
+        }
+    ]
 }
 
-6. hasMore must be true only when additional useful questions
-   remain in the source or can reasonably be generated.
-   Otherwise, return false.
+If the correct answer is missing or cannot be identified,
+use an empty string for "answer".
 
-7. If no new questions remain, return:
-   {"mcqs": [], "hasMore": false}
-
-8. Return complete questions only. Never return incomplete JSON.
+Return valid JSON only. Do not use Markdown.
 `;
+*/
 
-  async function getAIResponse(source, previousQuestions = []) {
+
+  async function getAIResponse(Value) {
+    console.log("API key loaded:", Boolean(APIKEY));
+    const url = "https://api.groq.com/openai/v1/chat/completions";
     if (!APIKEY) {
-      setErrorMessage(
-        'API key load nahi hui. Environment variable check karo.'
-      );
-      return null;
+      throw new Error("API key load nahi hui.");
     }
-
-    const requestData = {
-      sourceText: source,
-      previouslyProcessedQuestions: previousQuestions,
-      batchSize: BATCH_SIZE,
-      instruction:
-        previousQuestions.length === 0
-          ? 'Generate or process the first batch.'
-          : 'Continue from where the previous batch ended.'
-    };
-
     const Data = {
-      model: 'openai/gpt-oss-20b',
-      max_completion_tokens: 8192,
-      reasoning_effort: 'low',
-      response_format: {
-        type: 'json_object'
-      },
+      model: "openai/gpt-oss-20b",
+      max_completion_tokens: 3000,
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: SYSTEM_PROMPT
         },
         {
-          role: 'user',
-          content: JSON.stringify(requestData)
+          role: "user",
+          content: Value
         }
       ]
     };
 
     try {
-      const response = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${APIKEY}`
-          },
-          body: JSON.stringify(Data)
-        }
-      );
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${APIKEY}`,
+        },
+        body: JSON.stringify(Data)
+      });
 
       const result = await response.json();
 
-      
-if (!response.ok) {
-  const status = response.status;
 
-  let friendlyMessage =
-    'Your next batch could not be loaded. Please try again to continue your quiz.';
-
-  if (status === 429) {
-    friendlyMessage =
-      'Your next batch is waiting! Please wait a little and try again to continue your quiz.';
-  } else if (status >= 500) {
-    friendlyMessage =
-      'Our AI service is temporarily busy. Please try again in a little while.';
-  }
-
-  setErrorMessage(friendlyMessage);
-
-  console.error(
-    'API Error:',
-    result.error?.message || status
-  );
-
-  return null;
-}
-
-
-      const choice = result.choices?.[0];
-      const reply = choice?.message?.content;
-
-      if (!choice || !reply || choice.finish_reason === 'length') {
-        setErrorMessage(
-          'AI response incomplete hai. Dobara try karo.'
+      if (!response.ok) {
+        throw new Error(
+          result.error?.message || "API request failed."
         );
-        return null;
       }
 
+
+      // AI ka response string mein
+      const reply = result.choices[0].message.content;
+
+      console.log("AI Reply String:", reply);
+
+      // JSON string ko JavaScript object mein convert karo
+      console.log("Finish reason:", result.choices[0].finish_reason);
+      console.log("Usage:", result.usage);
+      console.log("Response length:", reply.length);
       const data = JSON.parse(reply);
-      console.log('AI hasMore:', data.hasMore);
-console.log('Received MCQs:', data.mcqs?.length);
-      if (!data || !Array.isArray(data.mcqs)) {
-        setErrorMessage('AI response ka format valid nahi hai.');
-        return null;
+
+      //console.log("Parsed Object:", data);
+      //console.log("MCQs Array:", data.mcqs);
+      for (let i = 0; i < data.mcqs.length; i++) {
+        console.log(data.mcqs[i].question);
+        console.log(data.mcqs[i].options);
+        console.log(data.mcqs[i].answer);
       }
+      //console.log("Last 300 characters:", reply.slice(-300));
+      setMcqs(data.mcqs);
+      //data.mcqs[0].question;
+      //console.log(data.mcqs[0].options);
+      //console.log(data.mcqs[0].answer);
 
-      // Validate and normalize each MCQ before displaying it.
-      const validMcqs = data.mcqs.filter((item) => {
-        return (
-          typeof item.question === 'string' &&
-          item.question.trim() !== '' &&
-          Array.isArray(item.options) &&
-          item.options.length > 0 &&
-          item.options.every(
-            (option) =>
-              typeof option.label === 'string' &&
-              typeof option.text === 'string'
-          ) &&
-          typeof item.answer === 'string'
-        );
-      });
+      return data;
 
-      if (validMcqs.length > BATCH_SIZE) {
-        validMcqs.length = BATCH_SIZE;
-      }
 
-      if (validMcqs.length === 0) {
-        setErrorMessage('');
-        return {
-          mcqs: [],
-          hasMore: false
-        };
-      }
-
-      setErrorMessage('');
-
-      return {
-  mcqs: validMcqs,
-  hasMore: data.hasMore !== false
-};
     } catch (error) {
-      console.error('AI processing error:', error.message);
-
-      setErrorMessage(
-        'Response process nahi ho saka. JSON ya network error check karo.'
-      );
-
-      return null;
+      console.error("Error:", error.message);
+      throw error;
     }
+
   }
 
-  async function handleGenerate() {
-    const source = ref1.current?.value.trim();
 
-    if (!source) {
-      setErrorMessage('Pehle apna text paste karo.');
-      return;
-    }
 
-    setSourceText(source);
-    setErrorMessage('');
-    setIsLoading(true);
 
-    try {
-      const result = await getAIResponse(source);
 
-      if (result && result.mcqs.length > 0) {
-        setMcqs(result.mcqs);
-        setHasMore(result.hasMore);
-        setShowQuiz(true);
-      } else if (result) {
-        setErrorMessage('Is text se koi valid MCQs nahi milay.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  async function Chat() {
+    return await getAIResponse(ref1.current.value);
   }
 
-  async function handleNextBatch() {
-    if (isLoading || !hasMore) {
-      return 0;
-    }
 
-    setIsLoading(true);
-    setErrorMessage('');
 
-    try {
-      const previousQuestions = Mcqs.map(
-        (item) => item.question
-      );
-
-      const result = await getAIResponse(
-        sourceText,
-        previousQuestions
-      );
-
-      if (!result) {
-        return 0;
-      }
-
-      const previousSet = new Set(
-        previousQuestions.map((question) =>
-          question.trim().toLowerCase()
-        )
-      );
-
-      const newMcqs = result.mcqs.filter(
-        (item) =>
-          !previousSet.has(item.question.trim().toLowerCase())
-      );
-
-      if (newMcqs.length === 0) {
-        setHasMore(false);
-        setErrorMessage(
-          'Mazeed unique MCQs nahi milay. Available questions complete hain.'
-        );
-        return 0;
-      }
-
-      // Append new MCQs instead of replacing previous batches.
-      setMcqs((previous) => [...previous, ...newMcqs]);
-      setHasMore(result.hasMore);
-
-      return newMcqs.length;
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  //data.mcqs[0].options);
+  //console.log(data.mcqs[0].answer)
 
   if (showLanding) {
     return (
@@ -307,42 +244,35 @@ console.log('Received MCQs:', data.mcqs?.length);
   return (
     <div>
       {!showQuiz && (
-        <>
+        <div>
           <nav className="Nav">
-            <h3>QuizNomaAI</h3>
+            <h3>Take-to-Quiz</h3>
             <h5>Dashboard</h5>
           </nav>
 
           <div className="Text-Area">
             <h2>Paste your text</h2>
-
             <textarea ref={ref1} />
+
 
             <button
               onClick={handleGenerate}
-              disabled={isLoading}
+              disabled={Generate}
             >
-              {isLoading ? 'Generating...' : 'Generate Quiz'}
+              {Generate ? "Generating..." : "Generate Quiz"}
             </button>
 
-            {errorMessage && <p>{errorMessage}</p>}
+
           </div>
-        </>
+        </div>
       )}
 
       {showQuiz && (
         <div className="Full-Quiz-Container">
-          <Quiz
-            Mcqs={Mcqs}
-            onNextBatch={handleNextBatch}
-            isLoading={isLoading}
-            hasMore={hasMore}
-            errorMessage={errorMessage}
-          />
+          <Quiz Mcqs={Mcqs} />
         </div>
       )}
     </div>
   );
 }
-
-export default App;    
+export default App;
