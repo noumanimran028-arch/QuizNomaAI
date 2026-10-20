@@ -198,6 +198,79 @@ body {
     background: #DDD6FE;
 }
 
+.Batch-Controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 760px;
+    margin: 10px auto 40px;
+    padding: 20px 16px;
+    border-top: 2px dashed #DDD6FE;
+}
+ 
+/* "Batch 1 of 20" label */
+.Batch-Controls p {
+    margin: 0;
+    padding: 6px 16px;
+    background: #EDE9FE;
+    color: #5B21B6;
+    border: 1px solid #C4B5FD;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+}
+ 
+/* Error message — label style ko override karta hai */
+.Batch-Controls .Batch-Error {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 500;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+ 
+/* Next Batch / New Text button */
+.Batch-Controls button {
+    min-width: 220px;
+    min-height: 50px;
+    padding: 12px 26px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6D28D9, #4F46E5);
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+    transition: transform 0.2s ease,
+                box-shadow 0.2s ease,
+                opacity 0.2s ease;
+}
+ 
+.Batch-Controls button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.32);
+}
+ 
+.Batch-Controls button:active:not(:disabled) {
+    transform: translateY(0);
+}
+ 
+/* Loading ke waqt */
+.Batch-Controls button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+ 
+.Batch-Controls button:focus-visible {
+    outline: 3px solid #A78BFA;
+    outline-offset: 3px;
+}
+
 /* Mobile Responsive */
 @media (max-width: 600px) {
     .Nav {
