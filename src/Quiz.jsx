@@ -68,7 +68,7 @@ function Quiz({ Mcqs }) {
                         <p>
                             Percentage: {((score / Mcqs.length) * 100).toFixed(0)}%
                         </p>
-                        <h3><Timer TotalMcqs = {Mcqs.length} onTimeUp={() => setShowData(true)} /></h3>
+                        <h4><Timer TotalMcqs = {Mcqs.length} onTimeUp={() => setShowData(true)} /></h4>
                     </div>
 
                     {/*Mcqs.map((item, index) => (
