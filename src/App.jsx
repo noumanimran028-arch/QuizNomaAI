@@ -9,20 +9,22 @@ const BATCH_SIZE = 10;
 const SYSTEM_PROMPT = `
 You are an intelligent MCQ converter and generator.
 
-If the input already contains MCQs:
-- Preserve every original question and its available options.
-- Preserve the correct answer when it is provided.
-- Do not create extra questions.
-- If an answer is missing or unknown, use "" for answer.
-- Do not invent missing options.
+TASK:
+1. If the input already contains MCQs, convert them into JSON.
+2. Preserve the original questions, available options, and answers.
+3. Do not invent missing options or answers.
+4. If an answer is missing or unknown, use an empty string.
+5. If the input contains educational notes instead of MCQs,
+   generate useful MCQs based only on the supplied information.
+6. For newly generated MCQs, provide four distinct options
+   labelled A, B, C, and D, with exactly one correct answer.
+7. Do not create duplicate questions.
+8. Process ALL MCQs in the current input batch.
+9. Do not skip questions or stop before the end of the batch.
 
-If the input contains educational notes instead of MCQs:
-- Generate useful MCQs based only on the provided information.
-- Each MCQ should have four distinct options labelled A, B, C, D.
-- Set answer to the correct option label.
-- Avoid duplicate questions.
+REQUIRED OUTPUT:
+Return only valid JSON in this exact structure:
 
-Return ONLY valid JSON in this format:
 {
   "mcqs": [
     {
@@ -38,7 +40,8 @@ Return ONLY valid JSON in this format:
   ]
 }
 
-No Markdown or explanations.
+Return no Markdown, code fences, or explanations.
+Use double quotes and valid JSON syntax.
 `;
 
 function App() {
@@ -47,22 +50,23 @@ function App() {
   const [Mcqs, setMcqs] = useState([]);
   const [Generate, setGenerate] = useState(false);
   const [progress, setProgress] = useState('');
+
   const ref1 = useRef(null);
   const isGenerating = useRef(false);
 
   const APIKEY = import.meta.env.VITE_GROQ_API_KEY;
 
-  // Input mein maujood numbered MCQs ko identify karo.
+  // Numbered MCQs ko identify karke 10-10 ke batches banao.
   function splitIntoBatches(text) {
-    const questionPattern =
-      /^\s*(?:(?:Q(?:uestion)?\s*)?\d+\s*[.)]|\d+\s*[-:])\s+/gm;
+    const questionStart =
+      /^\s*(?:(?:question|q)\s*)?\d+\s*[.)\-:]\s*|^\s*(?:question|q)\s*\d+\s*[.)\-:]\s*/gim;
 
-    const matches = [...text.matchAll(questionPattern)];
+    const matches = [...text.matchAll(questionStart)];
 
-    // Agar numbered MCQs identify na hon, poora text
-    // ek request mein bhejo; text ko ghalat tareeqe se na kaato.
+    // Agar numbered questions nahi milte, input ko
+    // andazay se cut na karo; ek request mein bhejo.
     if (matches.length < 2) {
-      return [text];
+      return [text.trim()];
     }
 
     const questions = [];
@@ -92,12 +96,15 @@ function App() {
     return batches;
   }
 
-  async function getAIResponse(value) {
+  // Groq ki ek API request bhejo aur JSON return lo.
+  async function getAIResponse(value, batchNumber) {
     if (!APIKEY) {
       throw new Error(
-        'Groq API key nahi mili. Apni .env file check karo.'
+        'API key nahi mili. VITE_GROQ_API_KEY check karo.'
       );
     }
+
+    console.log(`Sending API request for batch ${batchNumber}`);
 
     const response = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -117,7 +124,9 @@ function App() {
             },
             {
               role: 'user',
-              content: value,
+              content:
+                `Convert ALL MCQs in batch ${batchNumber} ` +
+                `into the required JSON format.\n\n${value}`,
             },
           ],
         }),
@@ -135,12 +144,20 @@ function App() {
     const choice = result.choices?.[0];
 
     if (!choice?.message?.content) {
-      throw new Error('AI ne empty response diya.');
+      throw new Error(`Batch ${batchNumber}: empty AI response.`);
     }
 
+    console.log(
+      `Batch ${batchNumber} finish reason:`,
+      choice.finish_reason
+    );
+
+    console.log('Token usage:', result.usage);
+
+    // Truncated response ko successful batch na samjho.
     if (choice.finish_reason === 'length') {
       throw new Error(
-        'AI response incomplete hai. Is batch ka output truncate ho gaya.'
+        `Batch ${batchNumber} ka response incomplete hai.`
       );
     }
 
@@ -149,64 +166,88 @@ function App() {
     let data;
 
     try {
-      // Normal JSON parse ki koshish karo.
+      // Pehle direct JSON parse karo.
       data = JSON.parse(reply);
     } catch {
-      // Agar AI ne JSON ke gird extra text diya ho,
-      // to JSON object extract karne ki koshish karo.
-      const start = reply.indexOf('{');
-      const end = reply.lastIndexOf('}');
+      // Agar response code fences mein ho, unhein hatao.
+      const cleaned = reply
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '')
+        .trim();
 
-      if (start === -1 || end <= start) {
-        throw new Error('AI ka response valid JSON nahi hai.');
+      try {
+        data = JSON.parse(cleaned);
+      } catch {
+        throw new Error(
+          `Batch ${batchNumber}: invalid JSON response.`
+        );
       }
-
-      data = JSON.parse(reply.slice(start, end + 1));
     }
 
     if (!data || !Array.isArray(data.mcqs)) {
-      throw new Error('AI response mein mcqs array nahi hai.');
+      throw new Error(
+        `Batch ${batchNumber}: mcqs array missing hai.`
+      );
     }
+
+    // Har question ka basic structure validate karo.
+    for (const mcq of data.mcqs) {
+      if (
+        !mcq ||
+        typeof mcq.question !== 'string' ||
+        !Array.isArray(mcq.options) ||
+        typeof mcq.answer !== 'string'
+      ) {
+        throw new Error(
+          `Batch ${batchNumber}: MCQ ka JSON structure invalid hai.`
+        );
+      }
+    }
+
+    console.log(
+      `Batch ${batchNumber} received ${data.mcqs.length} MCQs.`
+    );
 
     return data.mcqs;
   }
 
+  // Saare batches ko sequentially process karo.
   async function Chat() {
     const text = ref1.current?.value?.trim();
 
     if (!text) {
-      throw new Error('Please enter MCQs or educational text first.');
+      throw new Error('Please enter MCQs first.');
     }
 
     const batches = splitIntoBatches(text);
     const allMcqs = [];
 
     console.log('Total batches:', batches.length);
+    console.log('Batch size:', BATCH_SIZE);
 
-    // Har batch ko sequentially process karo.
     for (let i = 0; i < batches.length; i++) {
       setProgress(
         `Processing batch ${i + 1} of ${batches.length}...`
       );
 
-      console.log(`Processing batch ${i + 1}/${batches.length}`);
+      // Agli request tabhi chalegi jab current request complete ho.
+      const batchMcqs = await getAIResponse(
+        batches[i],
+        i + 1
+      );
 
-      const newMcqs = await getAIResponse(batches[i]);
-
-      // Batch ke MCQs ko combined result mein add karo.
-      allMcqs.push(...newMcqs);
+      allMcqs.push(...batchMcqs);
 
       console.log(
-        `Batch ${i + 1} complete. MCQs received:`,
-        newMcqs.length
+        `Completed batch ${i + 1}. Total collected: ${allMcqs.length}`
       );
     }
 
     if (allMcqs.length === 0) {
-      throw new Error('Koi MCQs generate ya convert nahi hue.');
+      throw new Error('Koi MCQs return nahi hue.');
     }
 
-    // Quiz ko tamam batches ke baad update karo.
+    // Saare batches complete hone par combined quiz save karo.
     setMcqs(allMcqs);
 
     return allMcqs;
@@ -216,7 +257,7 @@ function App() {
     if (isGenerating.current) return;
 
     if (!ref1.current?.value?.trim()) {
-      console.log('Please enter MCQs first.');
+      alert('Please enter MCQs or educational text first.');
       return;
     }
 
@@ -233,7 +274,7 @@ function App() {
         setShowQuiz(true);
       }
     } catch (error) {
-      console.error('Quiz generation error:', error.message);
+      console.error('Generation error:', error.message);
       alert(error.message);
     } finally {
       isGenerating.current = false;
@@ -264,7 +305,7 @@ function App() {
 
             <textarea
               ref={ref1}
-              placeholder="Paste your MCQs or educational text here..."
+              placeholder="Paste your MCQs here..."
               disabled={Generate}
             />
 
