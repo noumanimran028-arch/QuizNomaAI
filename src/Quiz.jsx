@@ -2,12 +2,14 @@
 import { useState } from 'react';
 import './Quiz.css';
 
+const BATCH_SIZE = 10;
+
 function Quiz({
-  Mcqs,
+  Mcqs = [],
   onNextBatch,
-  isLoading,
-  hasMore,
-  errorMessage
+  isLoading = false,
+  hasMore = false,
+  errorMessage = ''
 }) {
   const [activeMcqs, setActiveMcqs] = useState(0);
   const [score, setScore] = useState(0);
@@ -16,10 +18,24 @@ function Quiz({
   const [showData, setShowData] = useState(false);
 
   const currentQuestion = Mcqs[activeMcqs];
-  const allAnswered = Mcqs.every((_, index) =>
-  answered.includes(index)
-);
-  const isLastQuestion = activeMcqs === Mcqs.length - 1;
+
+  // Current 10-question batch ki boundaries.
+  const currentBatchStart =
+    Math.floor(activeMcqs / BATCH_SIZE) * BATCH_SIZE;
+
+  const currentBatchEnd = Math.min(
+    currentBatchStart + BATCH_SIZE,
+    Mcqs.length
+  );
+
+  // Sirf current batch ke questions ke answers check karo.
+  const allAnswered = Array.from(
+    { length: currentBatchEnd - currentBatchStart },
+    (_, index) => currentBatchStart + index
+  ).every((index) => answered.includes(index));
+
+  const isLastQuestion =
+    activeMcqs === Mcqs.length - 1;
 
   const Next = () => {
     if (activeMcqs < Mcqs.length - 1) {
@@ -36,16 +52,19 @@ function Quiz({
   };
 
   const Select = (option) => {
-    if (answered.includes(activeMcqs)) {
+    if (
+      answered.includes(activeMcqs) ||
+      !currentQuestion
+    ) {
       return;
     }
 
-    if (option.label === currentQuestion?.answer) {
+    if (option.label === currentQuestion.answer) {
       setScore((previous) => previous + 1);
       setFeedback('Correct!');
     } else {
-      const correctAnswer = currentQuestion?.options.find(
-        (item) => item.label === currentQuestion?.answer
+      const correctAnswer = currentQuestion.options?.find(
+        (item) => item.label === currentQuestion.answer
       );
 
       setFeedback(
@@ -57,34 +76,44 @@ function Quiz({
       );
     }
 
-    setAnswered((previous) => [...previous, activeMcqs]);
+    setAnswered((previous) => [
+      ...previous,
+      activeMcqs
+    ]);
   };
 
   const loadNextBatch = async () => {
-  if (!allAnswered || isLoading || !hasMore) {
-    console.log('Button blocked:', {
-      allAnswered,
-      isLoading,
-      hasMore
-    });
-    return;
-  }
-
-  const oldLength = Mcqs.length;
-
-  try {
-    const addedCount = await onNextBatch();
-
-    console.log('Added MCQs:', addedCount);
-
-    if (addedCount > 0) {
-      setActiveMcqs(oldLength);
-      setFeedback('');
+    if (
+      !allAnswered ||
+      isLoading ||
+      !hasMore ||
+      !onNextBatch
+    ) {
+      return;
     }
-  } catch (error) {
-    console.error('Loading next batch failed:', error);
-  }
-};
+
+    // Naye questions isi index se shuru honge.
+    const oldLength = Mcqs.length;
+
+    setFeedback('');
+
+    try {
+      const addedCount = await onNextBatch();
+
+      console.log('Next Batch added:', addedCount);
+
+      if (addedCount > 0) {
+        setActiveMcqs(oldLength);
+        setFeedback('');
+      }
+    } catch (error) {
+      console.error('Next batch error:', error);
+      setFeedback(
+        'Next batch load nahi hua. Dobara try karo.'
+      );
+    }
+  };
+
   return (
     <div>
       {!showData ? (
@@ -92,7 +121,9 @@ function Quiz({
           <nav className="Nav">
             <h3>QuizNomaAI</h3>
             <h5>
-              Question {activeMcqs + 1} of {Mcqs.length}
+              Question {Mcqs.length ? activeMcqs + 1 : 0}
+              {' of '}
+              {Mcqs.length}
             </h5>
           </nav>
 
@@ -109,7 +140,8 @@ function Quiz({
               Percentage:{' '}
               {Mcqs.length > 0
                 ? ((score / Mcqs.length) * 100).toFixed(0)
-                : 0}%
+                : 0}
+              %
             </p>
           </div>
 
@@ -118,16 +150,21 @@ function Quiz({
               <h3>{currentQuestion?.question}</h3>
             </div>
 
-            {currentQuestion?.options.map((option, index) => (
-              <div className="Box Option-Box" key={index}>
-                <button
-                  onClick={() => Select(option)}
-                  disabled={answered.includes(activeMcqs)}
+            {currentQuestion?.options?.map(
+              (option, index) => (
+                <div
+                  className="Box Option-Box"
+                  key={`${activeMcqs}-${index}`}
                 >
-                  {option.label} {option.text}
-                </button>
-              </div>
-            ))}
+                  <button
+                    onClick={() => Select(option)}
+                    disabled={answered.includes(activeMcqs)}
+                  >
+                    {option.label} {option.text}
+                  </button>
+                </div>
+              )
+            )}
           </div>
 
           {feedback && <h3>{feedback}</h3>}
@@ -137,14 +174,14 @@ function Quiz({
           <div className="Control">
             <button
               onClick={Previous}
-              disabled={activeMcqs === 0}
+              disabled={activeMcqs === 0 || isLoading}
             >
               Previous
             </button>
 
             <button
               onClick={Next}
-              disabled={isLastQuestion}
+              disabled={isLastQuestion || isLoading}
             >
               Next
             </button>
@@ -160,9 +197,23 @@ function Quiz({
               </button>
             )}
 
-            <button onClick={() => setShowData(true)}>
-              Submit Quiz
-            </button>
+            {!hasMore && isLastQuestion && (
+              <button
+                onClick={() => setShowData(true)}
+                disabled={isLoading}
+              >
+                Submit Quiz
+              </button>
+            )}
+
+            {!isLastQuestion && (
+              <button
+                onClick={() => setShowData(true)}
+                disabled={isLoading}
+              >
+                Finish Quiz
+              </button>
+            )}
           </div>
 
           {isLastQuestion && hasMore && !allAnswered && (
@@ -173,35 +224,44 @@ function Quiz({
           )}
 
           {isLastQuestion && !hasMore && (
-            <p>Mazeed questions available nahi hain.</p>
+            <p>
+              Tamam available questions complete ho gaye hain.
+            </p>
           )}
         </>
       ) : (
-        <Result Sc={score} length={Mcqs.length} />
+        <Result
+          Sc={score}
+          length={Mcqs.length}
+        />
       )}
     </div>
   );
 }
 
 function Result({ Sc, length }) {
-  const percentage = length > 0 ? (Sc / length) * 100 : 0;
+  const percentage =
+    length > 0 ? (Sc / length) * 100 : 0;
 
   let message = '';
 
   if (percentage >= 80) {
     message = 'Excellent! You have prepared very well.';
   } else if (percentage >= 60) {
-    message = 'Good! Your preparation is good, but keep practicing.';
+    message =
+      'Good! Your preparation is good, but keep practicing.';
   } else if (percentage >= 40) {
-    message = 'Average! You need more preparation and practice.';
+    message =
+      'Average! You need more preparation and practice.';
   } else {
-    message = 'Keep practicing! You need more revision to improve your score.';
+    message =
+      'Keep practicing! You need more revision to improve your score.';
   }
 
   return (
     <div className="Result">
       <h1>Quiz Completed!</h1>
-      <p>Score: {Sc}</p>
+      <p>Score: {Sc}/{length}</p>
       <p>Total Questions: {length}</p>
       <p>Percentage: {percentage.toFixed(0)}%</p>
       <h3>{message}</h3>
