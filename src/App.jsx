@@ -1,348 +1,201 @@
-import './App.css';
-import { useRef, useState } from 'react';
-import Quiz from './Quiz.jsx';
-import LandingDashboard from './LandingDashboard';
 
-const BATCH_SIZE = 10;
+import { useState } from 'react';
+import './Quiz.css';
 
-function App() {
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [showLanding, setShowLanding] = useState(true);
-  const [Mcqs, setMcqs] = useState([]);
-  const [sourceText, setSourceText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
+function Quiz({
+  Mcqs,
+  onNextBatch,
+  isLoading,
+  hasMore,
+  errorMessage
+}) {
+  const [activeMcqs, setActiveMcqs] = useState(0);
+  const [score, setScore] = useState(0);
+  const [answered, setAnswered] = useState([]);
+  const [feedback, setFeedback] = useState('');
+  const [showData, setShowData] = useState(false);
 
-  const ref1 = useRef(null);
+  const currentQuestion = Mcqs[activeMcqs];
+  const allAnswered = Mcqs.every((_, index) =>
+  answered.includes(index)
+);
+  const isLastQuestion = activeMcqs === Mcqs.length - 1;
 
-  const APIKEY = import.meta.env.VITE_GROQ_API_KEY;
-
-  const SYSTEM_PROMPT = `
-You are an intelligent MCQ processor and generator.
-
-The user will provide source text and previously processed questions.
-
-YOUR TASK:
-Return the NEXT batch of at most ${BATCH_SIZE} new MCQs.
-
-RULES:
-
-1. Identify whether the source already contains MCQs or
-   contains notes, paragraphs, or educational information.
-
-2. If the source contains existing MCQs:
-   - Preserve the original question, options, and answer.
-   - Process questions in their original order.
-   - Do not rewrite existing questions unnecessarily.
-   - Do not invent missing answers.
-   - Skip all questions listed as previously processed.
-
-3. If the source contains notes or general information:
-   - Generate relevant MCQs based on the source.
-   - Generate new questions different from previously processed ones.
-   - Use four options labelled A, B, C, and D.
-   - Set answer to the correct option label.
-   - Do not introduce unsupported facts.
-
-4. Return no more than ${BATCH_SIZE} new MCQs.
-   Return fewer if fewer valid questions remain.
-   Never return questions already processed.
-
-5. Return valid JSON only, using this structure:
-
-{
-  "mcqs": [
-    {
-      "question": "Question text",
-      "options": [
-        {"label": "A", "text": "Option A"},
-        {"label": "B", "text": "Option B"},
-        {"label": "C", "text": "Option C"},
-        {"label": "D", "text": "Option D"}
-      ],
-      "answer": "A"
+  const Next = () => {
+    if (activeMcqs < Mcqs.length - 1) {
+      setActiveMcqs((previous) => previous + 1);
+      setFeedback('');
     }
-  ],
-  "hasMore": true
-}
+  };
 
-6. hasMore must be true only when additional useful questions
-   remain in the source or can reasonably be generated.
-   Otherwise, return false.
-
-7. If no new questions remain, return:
-   {"mcqs": [], "hasMore": false}
-
-8. Return complete questions only. Never return incomplete JSON.
-`;
-
-  async function getAIResponse(source, previousQuestions = []) {
-    if (!APIKEY) {
-      setErrorMessage(
-        'API key load nahi hui. Environment variable check karo.'
-      );
-      return null;
+  const Previous = () => {
+    if (activeMcqs > 0) {
+      setActiveMcqs((previous) => previous - 1);
+      setFeedback('');
     }
+  };
 
-    const requestData = {
-      sourceText: source,
-      previouslyProcessedQuestions: previousQuestions,
-      batchSize: BATCH_SIZE,
-      instruction:
-        previousQuestions.length === 0
-          ? 'Generate or process the first batch.'
-          : 'Continue from where the previous batch ended.'
-    };
-
-    const Data = {
-      model: 'openai/gpt-oss-20b',
-      max_completion_tokens: 8192,
-      reasoning_effort: 'low',
-      response_format: {
-        type: 'json_object'
-      },
-      messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(requestData)
-        }
-      ]
-    };
-
-    try {
-      const response = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${APIKEY}`
-          },
-          body: JSON.stringify(Data)
-        }
-      );
-
-      const result = await response.json();
-
-      
-if (!response.ok) {
-  const status = response.status;
-
-  let friendlyMessage =
-    'Your next batch could not be loaded. Please try again to continue your quiz.';
-
-  if (status === 429) {
-    friendlyMessage =
-      'Your next batch is waiting! Please wait a little and try again to continue your quiz.';
-  } else if (status >= 500) {
-    friendlyMessage =
-      'Our AI service is temporarily busy. Please try again in a little while.';
-  }
-
-  setErrorMessage(friendlyMessage);
-
-  console.error(
-    'API Error:',
-    result.error?.message || status
-  );
-
-  return null;
-}
-
-
-      const choice = result.choices?.[0];
-      const reply = choice?.message?.content;
-
-      if (!choice || !reply || choice.finish_reason === 'length') {
-        setErrorMessage(
-          'AI response incomplete hai. Dobara try karo.'
-        );
-        return null;
-      }
-
-      const data = JSON.parse(reply);
-      console.log('AI hasMore:', data.hasMore);
-console.log('Received MCQs:', data.mcqs?.length);
-      if (!data || !Array.isArray(data.mcqs)) {
-        setErrorMessage('AI response ka format valid nahi hai.');
-        return null;
-      }
-
-      // Validate and normalize each MCQ before displaying it.
-      const validMcqs = data.mcqs.filter((item) => {
-        return (
-          typeof item.question === 'string' &&
-          item.question.trim() !== '' &&
-          Array.isArray(item.options) &&
-          item.options.length > 0 &&
-          item.options.every(
-            (option) =>
-              typeof option.label === 'string' &&
-              typeof option.text === 'string'
-          ) &&
-          typeof item.answer === 'string'
-        );
-      });
-
-      if (validMcqs.length > BATCH_SIZE) {
-        validMcqs.length = BATCH_SIZE;
-      }
-
-      if (validMcqs.length === 0) {
-        setErrorMessage('');
-        return {
-          mcqs: [],
-          hasMore: false
-        };
-      }
-
-      setErrorMessage('');
-
-      return {
-  mcqs: validMcqs,
-  hasMore: data.hasMore !== false
-};
-    } catch (error) {
-      console.error('AI processing error:', error.message);
-
-      setErrorMessage(
-        'Response process nahi ho saka. JSON ya network error check karo.'
-      );
-
-      return null;
-    }
-  }
-
-  async function handleGenerate() {
-    const source = ref1.current?.value.trim();
-
-    if (!source) {
-      setErrorMessage('Pehle apna text paste karo.');
+  const Select = (option) => {
+    if (answered.includes(activeMcqs)) {
       return;
     }
 
-    setSourceText(source);
-    setErrorMessage('');
-    setIsLoading(true);
+    if (option.label === currentQuestion?.answer) {
+      setScore((previous) => previous + 1);
+      setFeedback('Correct!');
+    } else {
+      const correctAnswer = currentQuestion?.options.find(
+        (item) => item.label === currentQuestion?.answer
+      );
 
-    try {
-      const result = await getAIResponse(source);
-
-      if (result && result.mcqs.length > 0) {
-        setMcqs(result.mcqs);
-        setHasMore(result.hasMore);
-        setShowQuiz(true);
-      } else if (result) {
-        setErrorMessage('Is text se koi valid MCQs nahi milay.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleNextBatch() {
-    if (isLoading || !hasMore) {
-      return 0;
+      setFeedback(
+        `Wrong! Correct answer: ${
+          correctAnswer
+            ? `${correctAnswer.label} - ${correctAnswer.text}`
+            : 'Answer not provided'
+        }`
+      );
     }
 
-    setIsLoading(true);
-    setErrorMessage('');
+    setAnswered((previous) => [...previous, activeMcqs]);
+  };
 
-    try {
-      const previousQuestions = Mcqs.map(
-        (item) => item.question
-      );
-
-      const result = await getAIResponse(
-        sourceText,
-        previousQuestions
-      );
-
-      if (!result) {
-        return 0;
-      }
-
-      const previousSet = new Set(
-        previousQuestions.map((question) =>
-          question.trim().toLowerCase()
-        )
-      );
-
-      const newMcqs = result.mcqs.filter(
-        (item) =>
-          !previousSet.has(item.question.trim().toLowerCase())
-      );
-
-      if (newMcqs.length === 0) {
-        setHasMore(false);
-        setErrorMessage(
-          'Mazeed unique MCQs nahi milay. Available questions complete hain.'
-        );
-        return 0;
-      }
-
-      // Append new MCQs instead of replacing previous batches.
-      setMcqs((previous) => [...previous, ...newMcqs]);
-      setHasMore(result.hasMore);
-
-      return newMcqs.length;
-    } finally {
-      setIsLoading(false);
+  const loadNextBatch = async () => {
+    if (!allAnswered || isLoading || !hasMore) {
+      return;
     }
-  }
 
-  if (showLanding) {
-    return (
-      <LandingDashboard
-        onGetStarted={() => setShowLanding(false)}
-      />
-    );
-  }
+    const addedCount = await onNextBatch();
+
+    if (addedCount > 0) {
+      // Move to the first question of the newly added batch.
+      setActiveMcqs((previous) => previous + 1);
+      setFeedback('');
+    }
+  };
 
   return (
     <div>
-      {!showQuiz && (
+      {!showData ? (
         <>
           <nav className="Nav">
             <h3>QuizNomaAI</h3>
-            <h5>Dashboard</h5>
+            <h5>
+              Question {activeMcqs + 1} of {Mcqs.length}
+            </h5>
           </nav>
 
-          <div className="Text-Area">
-            <h2>Paste your text</h2>
+          <div className="Pbox">
+            <div className="Cbox"></div>
+          </div>
 
-            <textarea ref={ref1} />
+          <div className="Score">
+            <p>
+              Score: {score}/{Mcqs.length}
+            </p>
 
+            <p>
+              Percentage:{' '}
+              {Mcqs.length > 0
+                ? ((score / Mcqs.length) * 100).toFixed(0)
+                : 0}%
+            </p>
+          </div>
+
+          <div className="Grid">
+            <div className="Box Question-Box">
+              <h3>{currentQuestion?.question}</h3>
+            </div>
+
+            {currentQuestion?.options.map((option, index) => (
+              <div className="Box Option-Box" key={index}>
+                <button
+                  onClick={() => Select(option)}
+                  disabled={answered.includes(activeMcqs)}
+                >
+                  {option.label} {option.text}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {feedback && <h3>{feedback}</h3>}
+
+          {errorMessage && <p>{errorMessage}</p>}
+
+          <div className="Control">
             <button
-              onClick={handleGenerate}
-              disabled={isLoading}
+              onClick={Previous}
+              disabled={activeMcqs === 0}
             >
-              {isLoading ? 'Generating...' : 'Generate Quiz'}
+              Previous
             </button>
 
-            {errorMessage && <p>{errorMessage}</p>}
-          </div>
-        </>
-      )}
+            <button
+              onClick={Next}
+              disabled={isLastQuestion}
+            >
+              Next
+            </button>
 
-      {showQuiz && (
-        <div className="Full-Quiz-Container">
-          <Quiz
-            Mcqs={Mcqs}
-            onNextBatch={handleNextBatch}
-            isLoading={isLoading}
-            hasMore={hasMore}
-            errorMessage={errorMessage}
-          />
-        </div>
+            {isLastQuestion && hasMore && (
+              <button
+                onClick={loadNextBatch}
+                disabled={!allAnswered || isLoading}
+              >
+                {isLoading
+                  ? 'Loading next batch...'
+                  : 'Next Batch'}
+              </button>
+            )}
+
+            <button onClick={() => setShowData(true)}>
+              Submit Quiz
+            </button>
+          </div>
+
+          {isLastQuestion && hasMore && !allAnswered && (
+            <p>
+              Next Batch unlock karne ke liye current batch ke
+              tamam questions answer karo.
+            </p>
+          )}
+
+          {isLastQuestion && !hasMore && (
+            <p>Mazeed questions available nahi hain.</p>
+          )}
+        </>
+      ) : (
+        <Result Sc={score} length={Mcqs.length} />
       )}
     </div>
   );
 }
 
-export default App;    
+function Result({ Sc, length }) {
+  const percentage = length > 0 ? (Sc / length) * 100 : 0;
+
+  let message = '';
+
+  if (percentage >= 80) {
+    message = 'Excellent! You have prepared very well.';
+  } else if (percentage >= 60) {
+    message = 'Good! Your preparation is good, but keep practicing.';
+  } else if (percentage >= 40) {
+    message = 'Average! You need more preparation and practice.';
+  } else {
+    message = 'Keep practicing! You need more revision to improve your score.';
+  }
+
+  return (
+    <div className="Result">
+      <h1>Quiz Completed!</h1>
+      <p>Score: {Sc}</p>
+      <p>Total Questions: {length}</p>
+      <p>Percentage: {percentage.toFixed(0)}%</p>
+      <h3>{message}</h3>
+    </div>
+  );
+}
+
+export default Quiz;
