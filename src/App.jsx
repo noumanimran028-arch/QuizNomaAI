@@ -218,32 +218,69 @@ console.log('Received MCQs:', data.mcqs?.length);
     }
   }
 
-  async function handleGenerate() {
-    const source = ref1.current?.value.trim();
-
-    if (!source) {
-      setErrorMessage('Pehle apna text paste karo.');
-      return;
-    }
-
-    setSourceText(source);
-    setErrorMessage('');
-    setIsLoading(true);
-
-    try {
-      const result = await getAIResponse(source);
-
-      if (result && result.mcqs.length > 0) {
-        setMcqs(result.mcqs);
-        setHasMore(result.hasMore);
-        setShowQuiz(true);
-      } else if (result) {
-        setErrorMessage('Is text se koi valid MCQs nahi milay.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  async function handleNextBatch() {
+  if (isLoading || !hasMore) {
+    console.log('Next batch blocked:', { isLoading, hasMore });
+    return 0;
   }
+
+  setIsLoading(true);
+  setErrorMessage('');
+
+  try {
+    const previousQuestions = Mcqs.map(
+      (item) => item.question
+    );
+
+    console.log('Requesting next batch...');
+    console.log('Previous MCQs:', previousQuestions.length);
+
+    const result = await getAIResponse(
+      sourceText,
+      previousQuestions
+    );
+
+    if (!result) {
+      console.log('AI returned no result.');
+      return 0;
+    }
+
+    console.log('AI returned MCQs:', result.mcqs.length);
+    console.log('AI hasMore:', result.hasMore);
+
+    const previousSet = new Set(
+      previousQuestions.map((question) =>
+        question.trim().toLowerCase()
+      )
+    );
+
+    const newMcqs = result.mcqs.filter(
+      (item) =>
+        !previousSet.has(item.question.trim().toLowerCase())
+    );
+
+    console.log('New unique MCQs:', newMcqs.length);
+
+    if (newMcqs.length === 0) {
+      setHasMore(false);
+      setErrorMessage(
+        'AI ne koi naya unique MCQ nahi diya. Dobara Generate Quiz se try karo.'
+      );
+      return 0;
+    }
+
+    setMcqs((previous) => [...previous, ...newMcqs]);
+    setHasMore(result.hasMore);
+
+    return newMcqs.length;
+  } catch (error) {
+    console.error('Next batch error:', error);
+    setErrorMessage('Next batch load nahi hua. Dobara try karo.');
+    return 0;
+  } finally {
+    setIsLoading(false);
+  }
+}
 
   async function handleNextBatch() {
     if (isLoading || !hasMore) {
