@@ -1,157 +1,201 @@
+
 import { useState } from 'react';
-import './Quiz.css'
-import Timer  from './Timer.jsx'
-function Quiz({ Mcqs }) {
-    const [activeMcqs, setActiveMcqs] = useState(0);
-    const [score, setScore] = useState(0);
-    const [answered, setAnswered] = useState([]);
-    const [feedback, setFeedback] = useState("");
-    const [showData, setShowData] = useState(false);
+import './Quiz.css';
 
+function Quiz({
+  Mcqs,
+  onNextBatch,
+  isLoading,
+  hasMore,
+  errorMessage
+}) {
+  const [activeMcqs, setActiveMcqs] = useState(0);
+  const [score, setScore] = useState(0);
+  const [answered, setAnswered] = useState([]);
+  const [feedback, setFeedback] = useState('');
+  const [showData, setShowData] = useState(false);
 
-    const Next = () => {
-        if (activeMcqs < Mcqs.length - 1) {
-            setActiveMcqs(activeMcqs + 1);
-            setFeedback("");
-        }
-    };
+  const currentQuestion = Mcqs[activeMcqs];
+  const allAnswered = Mcqs.every((_, index) =>
+  answered.includes(index)
+);
+  const isLastQuestion = activeMcqs === Mcqs.length - 1;
 
-    const Previous = () => {
-        if (activeMcqs > 0) {
-            setActiveMcqs(activeMcqs - 1);
-            setFeedback("");
-        }
-    };
+  const Next = () => {
+    if (activeMcqs < Mcqs.length - 1) {
+      setActiveMcqs((previous) => previous + 1);
+      setFeedback('');
+    }
+  };
 
-    //const correctAnswer = Mcqs[activeMcqs]?.answer;
-    //console.log(correctAnswer);
+  const Previous = () => {
+    if (activeMcqs > 0) {
+      setActiveMcqs((previous) => previous - 1);
+      setFeedback('');
+    }
+  };
 
-
-    const Select = (option) => {
-        if (answered.includes(activeMcqs)) {
-            return;
-        }
-
-        const currentQuestion = Mcqs[activeMcqs];
-
-        if (option.label === currentQuestion?.answer) {
-            setScore((prevScore) => prevScore + 1);
-            setFeedback("Correct!");
-        } else {
-            const correctAnswer = currentQuestion?.options.find(
-                (item) => item.label === currentQuestion?.answer
-            );
-
-            setFeedback(
-                `Wrong! Correct answer: ${correctAnswer?.label} - ${correctAnswer?.text}`
-            );
-        }
-
-        setAnswered((prev) => [...prev, activeMcqs]);
-    };
-
-    return (
-        <div>
-            {!showData ? (
-                <>
-                    <nav className="Nav">
-                        <h3>Take-to-Quiz</h3>
-                        <h5>Question {activeMcqs + 1} of {Mcqs.length}</h5>
-                    </nav>
-                    <div className="Pbox">
-                        <div className="Cbox">
-                        </div>
-                    </div>
-
-                    <div className="Score">
-                        <p>Score: {score}/{Mcqs.length}</p>
-                        <p>
-                            Percentage: {((score / Mcqs.length) * 100).toFixed(0)}%
-                        </p>
-                        <h4><Timer TotalMcqs = {Mcqs.length} onTimeUp={() => setShowData(true)} /></h4>
-                    </div>
-
-                    {/*Mcqs.map((item, index) => (
-                <div key={index}>
-                    <h3>{index + 1}. {item.question}</h3>
-
-                    {item.options.map((option, i) => (
-                        <p key={i}>
-                            {option.label} {option.text}
-                        </p>
-                    ))}
-
-                    <p>Answer: {item.answer}</p>
-                </div>
-            ))*/}
-
-                    <div className="Grid">
-                        <div className="Box Question-Box">
-                            <h3>{Mcqs[activeMcqs]?.question}</h3>
-                        </div>
-
-                        {Mcqs[activeMcqs]?.options.map((option, index) => (
-                            <div className="Box Option-Box" key={index}>
-
-                                <button onClick={() => Select(option)}>
-                                    {option.label} {option.text}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-
-                    {feedback && (
-                        <h3>Correct answer: {feedback}</h3>
-                    )}
-                    <div className="Control">
-                        <button onClick={Next}>Next</button>
-                        <button onClick={Previous}>Previous</button>
-                        <button  id = "submit" onClick={() => setShowData(true)}>Submit</button>
-                    </div>
-                </>
-            ) : (
-                <Result
-                    Sc={score}
-                    length={Mcqs.length}
-                />
-            )}
-        </div>
-    )
-}
-
-
-
-function Result(prop) {
-    const percentage = prop.length > 0
-        ? (prop.Sc / prop.length) * 100
-        : 0;
-
-    let message = "";
-
-    if (percentage >= 80) {
-        message = "Excellent! You have prepared very well.";
-    } else if (percentage >= 60) {
-        message = "Good! Your preparation is good, but keep practicing.";
-    } else if (percentage >= 40) {
-        message = "Average! You need more preparation and practice.";
-    } else {
-        message = "Keep practicing! You need more revision to improve your score.";
+  const Select = (option) => {
+    if (answered.includes(activeMcqs)) {
+      return;
     }
 
-    return (
-        <div className="Result">
-            <h1>Quiz Completed!</h1>
+    if (option.label === currentQuestion?.answer) {
+      setScore((previous) => previous + 1);
+      setFeedback('Correct!');
+    } else {
+      const correctAnswer = currentQuestion?.options.find(
+        (item) => item.label === currentQuestion?.answer
+      );
 
-            <p>Score: {prop.Sc}</p>
+      setFeedback(
+        `Wrong! Correct answer: ${
+          correctAnswer
+            ? `${correctAnswer.label} - ${correctAnswer.text}`
+            : 'Answer not provided'
+        }`
+      );
+    }
 
-            <p>Total Questions: {prop.length}</p>
+    setAnswered((previous) => [...previous, activeMcqs]);
+  };
 
-            <p>Percentage: {percentage.toFixed(0)}%</p>
+  const loadNextBatch = async () => {
+    if (!allAnswered || isLoading || !hasMore) {
+      return;
+    }
 
-            <h3>{message}</h3>
-        </div>
-    );
+    const addedCount = await onNextBatch();
+
+    if (addedCount > 0) {
+      // Move to the first question of the newly added batch.
+      setActiveMcqs((previous) => previous + 1);
+      setFeedback('');
+    }
+  };
+
+  return (
+    <div>
+      {!showData ? (
+        <>
+          <nav className="Nav">
+            <h3>QuizNomaAI</h3>
+            <h5>
+              Question {activeMcqs + 1} of {Mcqs.length}
+            </h5>
+          </nav>
+
+          <div className="Pbox">
+            <div className="Cbox"></div>
+          </div>
+
+          <div className="Score">
+            <p>
+              Score: {score}/{Mcqs.length}
+            </p>
+
+            <p>
+              Percentage:{' '}
+              {Mcqs.length > 0
+                ? ((score / Mcqs.length) * 100).toFixed(0)
+                : 0}%
+            </p>
+          </div>
+
+          <div className="Grid">
+            <div className="Box Question-Box">
+              <h3>{currentQuestion?.question}</h3>
+            </div>
+
+            {currentQuestion?.options.map((option, index) => (
+              <div className="Box Option-Box" key={index}>
+                <button
+                  onClick={() => Select(option)}
+                  disabled={answered.includes(activeMcqs)}
+                >
+                  {option.label} {option.text}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {feedback && <h3>{feedback}</h3>}
+
+          {errorMessage && <p>{errorMessage}</p>}
+
+          <div className="Control">
+            <button
+              onClick={Previous}
+              disabled={activeMcqs === 0}
+            >
+              Previous
+            </button>
+
+            <button
+              onClick={Next}
+              disabled={isLastQuestion}
+            >
+              Next
+            </button>
+
+            {isLastQuestion && hasMore && (
+              <button
+                onClick={loadNextBatch}
+                disabled={!allAnswered || isLoading}
+              >
+                {isLoading
+                  ? 'Loading next batch...'
+                  : 'Next Batch'}
+              </button>
+            )}
+
+            <button onClick={() => setShowData(true)}>
+              Submit Quiz
+            </button>
+          </div>
+
+          {isLastQuestion && hasMore && !allAnswered && (
+            <p>
+              Next Batch unlock karne ke liye current batch ke
+              tamam questions answer karo.
+            </p>
+          )}
+
+          {isLastQuestion && !hasMore && (
+            <p>Mazeed questions available nahi hain.</p>
+          )}
+        </>
+      ) : (
+        <Result Sc={score} length={Mcqs.length} />
+      )}
+    </div>
+  );
 }
 
+function Result({ Sc, length }) {
+  const percentage = length > 0 ? (Sc / length) * 100 : 0;
+
+  let message = '';
+
+  if (percentage >= 80) {
+    message = 'Excellent! You have prepared very well.';
+  } else if (percentage >= 60) {
+    message = 'Good! Your preparation is good, but keep practicing.';
+  } else if (percentage >= 40) {
+    message = 'Average! You need more preparation and practice.';
+  } else {
+    message = 'Keep practicing! You need more revision to improve your score.';
+  }
+
+  return (
+    <div className="Result">
+      <h1>Quiz Completed!</h1>
+      <p>Score: {Sc}</p>
+      <p>Total Questions: {length}</p>
+      <p>Percentage: {percentage.toFixed(0)}%</p>
+      <h3>{message}</h3>
+    </div>
+  );
+}
 
 export default Quiz;
