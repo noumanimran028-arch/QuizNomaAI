@@ -332,8 +332,24 @@ Required JSON structure:
         return;
       }
 
-      setMcqs(result.mcqs);
-      setHasMore(result.hasMore);
+     
+setMcqs(result.mcqs);
+
+setHasMore(
+  requestedTotal !== null
+    ? result.mcqs.length < requestedTotal
+    : result.hasMore
+);
+
+setShowQuiz(true);
+
+      
+setHasMore(
+  targetTotal !== null
+    ? updatedTotal < targetTotal
+    : result.hasMore
+);
+
       setShowQuiz(true);
     } catch (error) {
       console.error('Generate quiz error:', error);
