@@ -61,19 +61,30 @@ function Quiz({
   };
 
   const loadNextBatch = async () => {
-    if (!allAnswered || isLoading || !hasMore) {
-      return;
-    }
+  if (!allAnswered || isLoading || !hasMore) {
+    console.log('Button blocked:', {
+      allAnswered,
+      isLoading,
+      hasMore
+    });
+    return;
+  }
 
+  const oldLength = Mcqs.length;
+
+  try {
     const addedCount = await onNextBatch();
 
+    console.log('Added MCQs:', addedCount);
+
     if (addedCount > 0) {
-      // Move to the first question of the newly added batch.
-      setActiveMcqs((previous) => previous + 1);
+      setActiveMcqs(oldLength);
       setFeedback('');
     }
-  };
-
+  } catch (error) {
+    console.error('Loading next batch failed:', error);
+  }
+};
   return (
     <div>
       {!showData ? (
