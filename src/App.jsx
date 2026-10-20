@@ -247,9 +247,7 @@ Return valid JSON only. Do not use Markdown.
         <div>
           <nav className="Nav">
             <h3>Take-to-Quiz</h3>
-           <button onClick={() => window.location.href = "/LandingDashboard"}>
-  Dashboard
-</button>
+            <h2>Dashboard</h2>
           </nav>
 
           <div className="Text-Area">
