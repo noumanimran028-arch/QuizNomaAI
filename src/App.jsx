@@ -247,7 +247,7 @@ Return valid JSON only. Do not use Markdown.
         <div>
           <nav className="Nav">
             <h3>Take-to-Quiz</h3>
-            <h2>Dashboard</h2>
+            <h4>Dashboard</h4>
           </nav>
 
           <div className="Text-Area">
