@@ -1,4 +1,3 @@
-
 import './App.css';
 import { useRef, useState } from 'react';
 import Quiz from './Quiz.jsx';
@@ -19,49 +18,30 @@ function App() {
   const ref1 = useRef(null);
   const APIKEY = import.meta.env.VITE_GROQ_API_KEY;
 
-  // "Generate 200 MCQs on JavaScript" se target count nikalta hai.
+  // Extracts requested count from prompt string
   function getRequestedTotal(source) {
     const match = source.match(
       /\b(?:generate|create|make|prepare|give me)\s+(\d+)\s+(?:mcqs?|multiple[\s-]?choice questions?)\b/i
     );
-
     if (!match) return null;
-
     const count = Number(match[1]);
-
-    return Number.isSafeInteger(count) && count > 0
-      ? count
-      : null;
+    return Number.isSafeInteger(count) && count > 0 ? count : null;
   }
 
   const SYSTEM_PROMPT = `
 You are an intelligent MCQ processor and generator.
-
-The user provides source text, previously processed questions,
-and sometimes a requested total number of MCQs.
+The user provides source text, previously processed question strings, and a requested total.
 
 TASK:
 Return the next batch of new MCQs as valid JSON.
 
 RULES:
-1. If the source contains existing MCQs, preserve their original
-   wording, options, answers, and order as much as possible.
-2. If the source contains notes or educational information,
-   generate relevant MCQs based on that information.
-3. Do not repeat any question in previouslyProcessedQuestions.
-4. Every generated MCQ must have four options labelled A, B, C, D.
-5. The answer must be the correct option label: A, B, C, or D.
-6. Return no more than batchSize MCQs.
-7. If remainingRequestedCount is a positive number, do not return
-   more than that number of MCQs.
-8. If a requested total is provided, continue generating batches
-   until that total has been reached, provided enough valid content
-   can be generated from the source or topic.
-9. If no requested total is provided, set hasMore to true only
-   when additional useful questions remain or can reasonably be
-   generated. Otherwise set it to false.
-10. If no new valid questions remain, return an empty mcqs array.
-11. Return JSON only. Do not include Markdown or explanations.
+1. If the source contains notes or educational information, generate relevant MCQs based on that.
+2. CRITICAL: Do not repeat or duplicate any question title mentioned in previouslyProcessedQuestions.
+3. Every generated MCQ must have four options labelled A, B, C, D.
+4. The answer must match the correct option label exactly: A, B, C, or D.
+5. Return no more than batchSize MCQs.
+6. Return JSON only. Do not include Markdown wrapping or structural explanations.
 
 Required JSON structure:
 {
@@ -81,15 +61,9 @@ Required JSON structure:
 }
 `;
 
-  async function getAIResponse(
-    source,
-    previousQuestions = [],
-    requestedTotal = null
-  ) {
+  async function getAIResponse(source, previousQuestions = [], requestedTotal = null) {
     if (!APIKEY) {
-      setErrorMessage(
-        'API key load nahi hui. Vercel environment variables check karo.'
-      );
+      setErrorMessage('API key load nahi hui. Vercel environment variables check karo.');
       return null;
     }
 
@@ -98,7 +72,7 @@ Required JSON structure:
         ? null
         : Math.max(0, requestedTotal - previousQuestions.length);
 
-    if (remainingRequestedCount === 0) {
+    if (requestedTotal !== null && remainingRequestedCount === 0) {
       return { mcqs: [], hasMore: false };
     }
 
@@ -107,9 +81,12 @@ Required JSON structure:
         ? BATCH_SIZE
         : Math.min(BATCH_SIZE, remainingRequestedCount);
 
+    // OPTIMIZATION: Send only titles to prevent token clogging and bleeding wallet limits
+    const simplifiedPreviousTitles = previousQuestions.map(q => q.question.trim());
+
     const requestData = {
       sourceText: source,
-      previouslyProcessedQuestions: previousQuestions,
+      previouslyProcessedQuestions: simplifiedPreviousTitles, 
       batchSize: requestBatchSize,
       requestedTotal,
       remainingRequestedCount,
@@ -122,91 +99,54 @@ Required JSON structure:
     const requestBody = {
       model: 'openai/gpt-oss-20b',
       max_completion_tokens: 8192,
-      reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(requestData)
-        }
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: JSON.stringify(requestData) }
       ]
     };
 
     try {
-      const response = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${APIKEY}`
-          },
-          body: JSON.stringify(requestBody)
-        }
-      );
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${APIKEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
 
       const result = await response.json();
 
       if (!response.ok) {
-        console.error(
-          'Groq API error:',
-          result.error?.message || response.status
-        );
-
         if (response.status === 429) {
-          setErrorMessage(
-            'API request limit reach ho gayi hai. Thori dair baad dobara try karo.'
-          );
+          setErrorMessage('API request limit reach ho gayi hai. Thori dair baad dobara try karo.');
         } else if (response.status >= 500) {
-          setErrorMessage(
-            'AI service filhal busy hai. Kuch dair baad try karo.'
-          );
+          setErrorMessage('AI service filhal busy hai. Kuch dair baad try karo.');
         } else {
-          setErrorMessage(
-            result.error?.message ||
-              `API request failed: ${response.status}`
-          );
+          setErrorMessage(result.error?.message || `API request failed: ${response.status}`);
         }
-
         return null;
       }
 
       const choice = result.choices?.[0];
       const reply = choice?.message?.content;
 
-      console.log('AI finish reason:', choice?.finish_reason);
-
-      if (
-        !choice ||
-        !reply ||
-        choice.finish_reason === 'length'
-      ) {
-        setErrorMessage(
-          'AI response incomplete hai. Dobara try karo.'
-        );
+      if (!choice || !reply || choice.finish_reason === 'length') {
+        setErrorMessage('AI response incomplete hai. Dobara try karo.');
         return null;
       }
 
       let data;
-
       try {
         data = JSON.parse(reply);
       } catch {
-        console.error('Invalid JSON from AI:', reply);
-        setErrorMessage(
-          'AI ka response valid JSON nahi tha. Dobara try karo.'
-        );
+        setErrorMessage('AI ka response valid JSON nahi تھا. Dobara try karo.');
         return null;
       }
 
       if (!data || !Array.isArray(data.mcqs)) {
-        setErrorMessage(
-          'AI response ka format valid nahi hai.'
-        );
+        setErrorMessage('AI response ka format valid nahi hai.');
         return null;
       }
 
@@ -221,10 +161,7 @@ Required JSON structure:
           return false;
         }
 
-        const labels = item.options.map(
-          (option) => option?.label
-        );
-
+        const labels = item.options.map((option) => option?.label);
         const validOptions = item.options.every(
           (option) =>
             typeof option?.label === 'string' &&
@@ -234,9 +171,7 @@ Required JSON structure:
 
         return (
           validOptions &&
-          ['A', 'B', 'C', 'D'].every((label) =>
-            labels.includes(label)
-          ) &&
+          ['A', 'B', 'C', 'D'].every((label) => labels.includes(label)) &&
           ['A', 'B', 'C', 'D'].includes(item.answer)
         );
       });
@@ -244,247 +179,115 @@ Required JSON structure:
       const uniqueInBatch = [];
       const batchQuestions = new Set();
 
+      // Filter local batch duplicates
       for (const item of validMcqs) {
         const key = item.question.trim().toLowerCase();
-
         if (!batchQuestions.has(key)) {
           batchQuestions.add(key);
           uniqueInBatch.push(item);
         }
       }
 
-      const limitedMcqs = uniqueInBatch.slice(
-        0,
-        requestBatchSize
-      );
-
-      console.log('AI hasMore:', data.hasMore);
-      console.log('Valid MCQs:', limitedMcqs.length);
+      const limitedMcqs = uniqueInBatch.slice(0, requestBatchSize);
 
       if (limitedMcqs.length === 0) {
-        setErrorMessage(
-          'AI ne koi naya valid MCQ nahi diya.'
-        );
-
-        return {
-          mcqs: [],
-          hasMore: false
-        };
+        setErrorMessage('AI ne koi naya valid MCQ nahi diya.');
+        return { mcqs: [], hasMore: false };
       }
 
-      // Explicit requested count ko AI ke hasMore se zyada priority do.
       const nextHasMore =
         requestedTotal !== null
-          ? previousQuestions.length + limitedMcqs.length <
-            requestedTotal
+          ? previousQuestions.length + limitedMcqs.length < requestedTotal
           : data.hasMore === true;
 
       setErrorMessage('');
+      return { mcqs: limitedMcqs, hasMore: nextHasMore };
 
-      return {
-        mcqs: limitedMcqs,
-        hasMore: nextHasMore
-      };
     } catch (error) {
       console.error('AI processing error:', error);
-
-      setErrorMessage(
-        'Network ya response processing error hua. Dobara try karo.'
-      );
-
+      setErrorMessage('Network ya response processing error hua. Dobara try karo.');
       return null;
     }
   }
 
+  // --- COMPLETED BATCH INITIATOR LOGIC ---
   async function handleGenerate() {
     const source = ref1.current?.value.trim();
-
     if (!source) {
-      setErrorMessage('Pehle apna text ya MCQ topic enter karo.');
+      setErrorMessage('Please enter some text or prompt to generate quiz.');
       return;
     }
 
-    if (isLoading) return;
-
-    const requestedTotal = getRequestedTotal(source);
-
+    setErrorMessage('');
+    setIsLoading(true);
     setSourceText(source);
-    setTargetTotal(requestedTotal);
-    setMcqs([]);
-    setHasMore(true);
-    setShowQuiz(false);
-    setErrorMessage('');
-    setIsLoading(true);
 
-    try {
-      const result = await getAIResponse(
-        source,
-        [],
-        requestedTotal
-      );
+    const totalCount = getRequestedTotal(source);
+    setTargetTotal(totalCount);
 
-      if (!result) return;
+    // Fetch initial first batch
+    const result = await getAIResponse(source, [], totalCount);
 
-      if (result.mcqs.length === 0) {
-        setErrorMessage(
-          'Is input se koi valid MCQ nahi mila. Apna text ya topic check karo.'
-        );
-        return;
-      }
+    setIsLoading(false);
 
-     
-setMcqs(result.mcqs);
-
-setHasMore(
-  requestedTotal !== null
-    ? result.mcqs.length < requestedTotal
-    : result.hasMore
-);
-
-setShowQuiz(true);
-
-      
-setHasMore(
-  targetTotal !== null
-    ? updatedTotal < targetTotal
-    : result.hasMore
-);
-
+    if (result && result.mcqs.length > 0) {
+      setMcqs(result.mcqs);
+      setHasMore(result.hasMore);
+      setShowLanding(false);
       setShowQuiz(true);
-    } catch (error) {
-      console.error('Generate quiz error:', error);
-      setErrorMessage('Quiz generate nahi hua. Dobara try karo.');
-    } finally {
-      setIsLoading(false);
     }
   }
 
-  async function handleNextBatch() {
-    if (isLoading || !hasMore || Mcqs.length === 0) {
-      console.log('Next batch blocked:', {
-        isLoading,
-        hasMore,
-        loadedQuestions: Mcqs.length
-      });
-
-      return 0;
-    }
+  // --- CONTINUOUS INCREMENTAL BATCH TRIGGER ---
+  async function handleLoadNextBatch() {
+    if (isLoading || !hasMore) return;
 
     setIsLoading(true);
     setErrorMessage('');
 
-    try {
-      const previousQuestions = Mcqs.map(
-        (item) => item.question
-      );
+    const result = await getAIResponse(sourceText, Mcqs, targetTotal);
 
-      console.log(
-        'Requesting next batch. Already loaded:',
-        previousQuestions.length
-      );
+    setIsLoading(false);
 
-      const result = await getAIResponse(
-        sourceText,
-        previousQuestions,
-        targetTotal
-      );
-
-      if (!result) return 0;
-
-      const previousSet = new Set(
-        previousQuestions.map((question) =>
-          question.trim().toLowerCase()
-        )
-      );
-
-      const newMcqs = result.mcqs.filter(
-        (item) =>
-          !previousSet.has(
-            item.question.trim().toLowerCase()
-          )
-      );
-
-      console.log('New unique MCQs:', newMcqs.length);
-
-      if (newMcqs.length === 0) {
-        setHasMore(false);
-        setErrorMessage(
-          'Mazeed unique MCQs nahi milay. Available questions complete hain.'
-        );
-        return 0;
-      }
-
-      const updatedTotal =
-        previousQuestions.length + newMcqs.length;
-
-      setMcqs((previous) => [...previous, ...newMcqs]);
-
-      setHasMore(
-        targetTotal !== null
-          ? updatedTotal < targetTotal
-          : result.hasMore
-      );
-
-      return newMcqs.length;
-    } catch (error) {
-      console.error('Next batch error:', error);
-      setErrorMessage(
-        'Next batch load nahi hua. Dobara try karo.'
-      );
-      return 0;
-    } finally {
-      setIsLoading(false);
+    if (result && result.mcqs.length > 0) {
+      setMcqs((prev) => [...prev, ...result.mcqs]);
+      setHasMore(result.hasMore);
+    } else if (result && result.mcqs.length === 0) {
+      setHasMore(false);
     }
   }
 
-  if (showLanding) {
-    return (
-      <LandingDashboard
-        onGetStarted={() => setShowLanding(false)}
-      />
-    );
+  function handleReset() {
+    setMcqs([]);
+    setSourceText('');
+    setTargetTotal(null);
+    setHasMore(true);
+    setErrorMessage('');
+    setShowQuiz(false);
+    setShowLanding(true);
   }
 
   return (
-    <div>
-      {!showQuiz && (
-        <>
-          <nav className="Nav">
-            <h3>QuizNomaAI</h3>
-            <h5>Dashboard</h5>
-          </nav>
-
-          <div className="Text-Area">
-            <h2>Paste your text or enter a topic</h2>
-
-            <textarea
-              ref={ref1}
-              placeholder="Paste your MCQs/notes, or enter: Generate 200 MCQs on JavaScript"
-              disabled={isLoading}
-            />
-
-            <button
-              onClick={handleGenerate}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Generating...' : 'Generate Quiz'}
-            </button>
-
-            {errorMessage && <p>{errorMessage}</p>}
-          </div>
-        </>
+    <div className="app-container">
+      {showLanding && (
+        <LandingDashboard 
+          inputRef={ref1} 
+          onGenerate={handleGenerate} 
+          isLoading={isLoading} 
+          errorMessage={errorMessage}
+        />
       )}
 
       {showQuiz && (
-        <div className="Full-Quiz-Container">
-          <Quiz
-            Mcqs={Mcqs}
-            onNextBatch={handleNextBatch}
-            isLoading={isLoading}
-            hasMore={hasMore}
-            errorMessage={errorMessage}
-          />
-        </div>
+        <Quiz 
+          questions={Mcqs} 
+          hasMore={hasMore} 
+          onNextBatch={handleLoadNextBatch} 
+          onReset={handleReset}
+          isLoading={isLoading}
+          targetTotal={targetTotal}
+          errorMessage={errorMessage}
+        />
       )}
     </div>
   );
